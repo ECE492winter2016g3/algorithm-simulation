@@ -1,10 +1,46 @@
 #include "analyzer.h"
-#include <SDL.h>
 #include <cmath>
 #include <algorithm>
 #include <iostream>
+#include <random>
 
 using namespace std;
+
+// Normall distributed noise added to LIDAR test 
+std::normal_distribution<> LIDAR_VARIANCE(0.0f, 1.0f);
+std::random_device rd;
+std::mt19937 random_gen{rd()};
+
+void Analyzer::scanSweep(
+	coord<double> source, double angle, 
+	vector<line<double>> shape,
+	vector<float> &angles, vector<float> &distances) 
+{
+	angles.clear();
+	distances.clear();
+	for (int step = 0; step < 50; ++step) {
+		float theta = step * (M_PI*2.0f / 50.0f);
+		line<double> scan = {
+			source.x,
+			source.y,
+			source.x + 2000*cos(angle + theta),
+			source.y + 2000*sin(angle + theta)
+		};
+		float bestDist = 1000000;
+		for (auto line : shape) {
+			coord<double> point;
+			if (line.intersects(scan, &point)) {
+				float dx = point.x - source.x;
+				float dy = point.y - source.y;
+				float dist = sqrt(dx*dx + dy*dy);
+				if (dist < bestDist)
+					bestDist = dist;
+			}
+		}
+		angles.push_back(theta);
+		distances.push_back(bestDist + LIDAR_VARIANCE(random_gen));
+	}
+}
 
 coord<double> Analyzer::scan(coord<double> source, double angle, vector<line<double>> shape) {
 
@@ -17,8 +53,8 @@ coord<double> Analyzer::scan(coord<double> source, double angle, vector<line<dou
 	// Transformation to make reasoning about this easier. Multiply each x by t.x and each y
 	// by t.y, and now everything is in the positive x, positive y quadrant
 	coord<double> t = {
-		directionVector.x >= 0 ? 1 : -1,
-		directionVector.y >= 0 ? 1 : -1
+		directionVector.x >= 0.0f ? 1.0f : -1.0f,
+		directionVector.y >= 0.0f ? 1.0f : -1.0f
 	};
 	const line<double>& rightMost = *max_element(shape.begin(), shape.end(),
 		[&t](const line<double>& a, const line<double>& b) {

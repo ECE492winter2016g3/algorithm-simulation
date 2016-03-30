@@ -10,6 +10,8 @@
 #include "util.h"
 #include "analyzer.h"
 
+#include "Project\Project\mapping.h"
+
 using namespace std;
 
 int main(int argc, char* argv[]) {
@@ -57,16 +59,29 @@ int main(int argc, char* argv[]) {
 	Plotter p;
 	p.init();
 
+	vector<float> angles{};
+	vector<float> distances{};
+
+	// Mapping Algo init
+	map_state mapState;
+	mapping_init(&mapState);
+	Analyzer::scanSweep(vehiclePosition, vehicleAngle, shapeLines, angles, distances);
+	mapping_initial_scan(&mapState, angles.size(), &angles[0], &distances[0]);
+
 	bool quit = false;
 	SDL_Event e;
 	while (!quit) {
 		while (SDL_PollEvent(&e) != 0) {
 			if (e.type == SDL_QUIT) {
 				quit = true;
-			}
-			else if (e.type == SDL_KEYDOWN) {
+			} else if (e.type == SDL_KEYDOWN) {
 				if (e.key.keysym.sym == SDLK_SPACE) {
 					sensorActive = !sensorActive;
+				} else if (e.key.keysym.sym == SDLK_q) {
+					Analyzer::scanSweep(vehiclePosition, vehicleAngle,
+						shapeLines,
+						angles, distances);
+					mapping_update_lin(&mapState, angles.size(), &angles[0], &distances[0]);
 				}
 			}
 		}
@@ -88,7 +103,7 @@ int main(int argc, char* argv[]) {
 			point = Analyzer::scan(vehiclePosition, vehicleAngle + sensorAngle, shapeLines);
 			sensorAngle += sensorRotationIncrement;
 			points.push_back(point);
-			records.push_back({ point.dist(vehiclePosition), sensorAngle });
+			records.push_back({point.dist(vehiclePosition), sensorAngle});
 			estimate = Analyzer::getMap(records);
 			allLines.clear();
 			allLines.reserve(shapeLines.size() + estimate.size());
@@ -99,24 +114,49 @@ int main(int argc, char* argv[]) {
 		p.calibrate(points, allLines);
 		p.plot(0, points, shapeLines);
 
-		p.plot(1, { vehiclePosition }, {{
+		p.plot(1, {vehiclePosition}, {{
 			vehiclePosition.x, vehiclePosition.y,
 			vehiclePosition.x + cos(vehicleAngle * M_PI / 180) * 0.2,
 			vehiclePosition.y + sin(vehicleAngle * M_PI / 180) * 0.2,
 		}});
 
-		if (sensorActive) {
-			p.plot(2, {}, { { vehiclePosition.x, vehiclePosition.y, point.x, point.y } });
+		vector<line<double>> lines{};
+		for (map_segment *seg = mapState.all_segments_list; seg; seg = seg->next) {
+			map_point *first = seg->point_list;
+			map_point *last = first;
+			while (last->next) last = last->next;
+			lines.push_back({
+				first->x,
+				first->y,
+				last->x,
+				last->y
+			});
 		}
+		vector<coord<double>> points{};
+		for (int x = 0; x < BROAD_STEPS; ++x) {
+			for (int y = 0; y < BROAD_STEPS; ++y) {
+				for (map_point *pt = mapState.broad_phase[x][y].point_list; pt; pt = pt->next) {
+					points.push_back({
+						pt->x, 
+						pt->y
+					});
+				}
+			}
+		}
+		std::cout << "Drawing " << lines.size() << " lines and " << points.size() << " points.\n";
+		p.plot(2, points, lines);
+		//if (sensorActive) {
+		//	p.plot(2, {}, { { vehiclePosition.x, vehiclePosition.y, point.x, point.y } });
+		//}
 
-		p.plot(3, {}, estimate);
+		//p.plot(3, {}, estimate);
 		SDL_Delay(100);
 
 		p.present();
 	}
 
 	for (auto record : records) {
-		cout << "distance: " << record.distance << ", angle: " << record.angle << endl;
+		//cout << "distance: " << record.distance << ", angle: " << record.angle << endl;
 	}
 
 	return 0;
