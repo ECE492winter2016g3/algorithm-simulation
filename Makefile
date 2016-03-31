@@ -18,3 +18,10 @@ test: lib test.cpp
 
 run: all
 	./test
+
+java: test.java mapping.java
+	javac test.java
+	javac mapping.java
+
+runjava: java
+	java test

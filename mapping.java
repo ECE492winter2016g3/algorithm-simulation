@@ -725,7 +725,7 @@ public class mapping {
 	///////////////////////////////////////////////////////
 
 	public mapping() {
-
+		
 	}
 
 	public void init() {
