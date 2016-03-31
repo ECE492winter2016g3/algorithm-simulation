@@ -92,23 +92,41 @@ class test {
 		for (int i = 0; i < count; ++i) {
 			int tx = (int)(100 + x + (float)Math.cos(angles[i])*distances[i]);
 			int ty = (int)(100 + y + (float)Math.sin(angles[i])*distances[i]);
-			System.out.println("Point: " + tx + ", " + ty);
 			out = out + "-draw \"circle " + (tx-1) + "," + (ty-1) + " "
 				+ (tx+1) + "," + (ty+1) + "\" ";
 		}
 		out = out + "test.png";
-		System.out.println(out);
+		//System.out.println(out);
 
 		// Mapping
 		mapping m = new mapping();
 
 		m.init();
 		m.initialScan(angles, distances);
-		m.
+
+		// for (int i = 0; i < 12; ++i) {
+		// 	x -= 5;
+		// 	distances = sweep(angles);
+		// 	m.updateLin(angles, distances);
+		// 	System.out.println("-> x = " + m.getPosition().x);
+		// }
+
+		theta -= (float)(Math.PI / 6);
+		distances = sweep(angles);
+		m.updateRot(angles, distances, (float)-(Math.PI / 4));
+
+		String map = "convert -size 200x200 xc:white -fill black -stroke black ";
+		for (mapping.MapSegment seg: m.getSegments()) {
+			map = map + "-draw \"line " +
+				(100+seg.origin.x) + "," + (100+seg.origin.y) + " " +
+				(100+seg.origin.x + seg.vec.x) + "," + (100+seg.origin.y + seg.vec.y) + "\" ";
+		}
+		map = map + "test.png";
+		System.out.println(map);
 
 		try {
 			Runtime r = Runtime.getRuntime();
-			Process p = r.exec(out);
+			Process p = r.exec(map);
 			p.waitFor();
 			BufferedReader b = new BufferedReader(new InputStreamReader(p.getInputStream()));
 			String line = "";

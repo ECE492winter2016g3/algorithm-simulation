@@ -327,18 +327,18 @@ public class mapping {
 			point.position.y = x*st + y*ct;
 		}
 
-		// Addd
+		// Add
 		for (MapSegment seg: segments) {
 			for (MapPoint point: seg.pointList) {
-				point.position.x += oldX;
-				point.position.y += oldY;
+				point.position.x += robotPosition.x;
+				point.position.y += robotPosition.y;
 			}
-			seg.origin.x += oldX;
-			seg.origin.y += oldY;
+			seg.origin.x += robotPosition.x;
+			seg.origin.y += robotPosition.y;
 		}
 		for (MapPoint point: points) {
-			point.position.x += oldX;
-			point.position.y += oldY;
+			point.position.x += robotPosition.x;
+			point.position.y += robotPosition.y;
 		}
 	}
 
@@ -492,13 +492,16 @@ public class mapping {
 			int best_index = 0;
 			float best_weight = 0;
 			for (int i = 0; i < histogram.size(); ++i) {
+				//System.out.println(" Hist ent: [" + histogram.get(i).weight +
+				//	"] = " + histogram.get(i).diff);
 				if (histogram.get(i).weight >= best_weight) {
 					best_weight = histogram.get(i).weight;
 					best_index = i;
 				}
 			}
-			float best_diff = histogram.get(best_index).diff;
+			float best_diff = histogram.get(best_index).total / histogram.get(best_index).count;
 			robotPosition.add(mul(u, best_diff));
+			System.out.println("Linearmotion moved " + best_diff);
 			return 0;
 		}
 	}
@@ -547,12 +550,15 @@ public class mapping {
 			// Is one of the ends of the line seg touching the candidate?
 			boolean isTouching =  (d2 < 2*LIDAR_VARIANCE || d1 < 2*LIDAR_VARIANCE);
 			// Do the line segments overlap in projection?
-			boolean projectionDoesOverlap = (p2 > 0 && p2 < tlen) || (p1 > 0 && p1 < tlen);
+			float overlapSlop = 2*LIDAR_VARIANCE;
+			boolean projectionDoesOverlap = 
+				(p2 > -overlapSlop && p2 < tlen+overlapSlop) || 
+				(p1 > -overlapSlop && p1 < tlen+overlapSlop);
 			// 
 			if ((projectionDoesOverlap && (isTouching || relativelyClose)) || doesIntersect) {
 				// We have an intersection. Add the points from seg to
 				// cand and re-regress it.
-				cand.pointList.addAll(seg.pointList.size()-1, seg.pointList);
+				cand.pointList.addAll(cand.pointList.size()-1, seg.pointList);
 
 				// Re-regress
 				regressSegment(cand);
@@ -593,7 +599,7 @@ public class mapping {
 		ArrayList<HistEntry> histogram = new ArrayList<HistEntry>();
 		int hist_cap = 10;
 
-		for (MapSegment to_match: allSegments) {
+		for (MapSegment to_match: segments) {
 			//std::cout << "Rot motion to match...\n";
 			// Find the perpendicular distance to the robot
 			// by projecting the robot position on to the edge
@@ -607,27 +613,29 @@ public class mapping {
 				pdist1 = length(d.x - frac*to_match.vec.x, d.y - frac*to_match.vec.y);
 			}
 			float theta1 = (float)Math.atan2(to_match.vec.y, to_match.vec.x);
-		
+
 			// Try to match to a segment with a very similar perpendicular distance
 			// to the robot
 			for (MapSegment a_match: allSegments) {
 				float pdist2 = 0;
 				float psign2 = 0;
 				{
-				Vec d = sub(robotPosition, a_match.origin);
-				float elen = a_match.vec.length();
-				float frac = dot(d, a_match.vec) / (elen * elen);
-				psign1 = frac;
-				pdist1 = length(d.x - frac*a_match.vec.x, d.y - frac*to_match.vec.y);
+					Vec d = sub(robotPosition, a_match.origin);
+					float elen = a_match.vec.length();
+					float frac = dot(d, a_match.vec) / (elen * elen);
+					psign2 = frac;
+					pdist2 = length(d.x - frac*a_match.vec.x, d.y - frac*a_match.vec.y);
 				}
+				float theta2 = (float)Math.atan2(a_match.vec.y, a_match.vec.x);
 				if (Math.abs(pdist1 - pdist2) < 3*LIDAR_VARIANCE) {
 					// Is a candidate, compute the angluar difference between the two
-					float theta2 = (float)Math.atan2(a_match.vec.y, a_match.vec.x);
 					float dtheta = theta2 - theta1;
 
 					// Force positive difference
-					if (dtheta < 0)
-						dtheta += 2*3.141592653f;
+					if (dtheta < -3.14159253f)
+						dtheta += 3.141592653f;
+					if (dtheta > 3.14159253f)
+						dtheta -= 3.14159253f;
 
 					// Now, we have to calculate how reliable the measurement is, off
 					// of how oblique the distance to the feature is
@@ -646,11 +654,7 @@ public class mapping {
 						float leastWeight = 10000;
 						for (int i = 0; i < histogram.size(); ++i) {
 							HistEntry entry = histogram.get(i);
-							float del = entry.diff - dtheta;
-							if (del < 0)
-								del += 2*3.141592653f;
-
-							if (Math.min(del, del) < 2*TURN_TWEAK) {
+							if (Math.abs(entry.diff - dtheta) < 2*TURN_TWEAK) {
 								entry.weight += weight;
 								entry.total += dtheta;
 								entry.count += 1;
@@ -698,6 +702,8 @@ public class mapping {
 			int best_index = 0;
 			float best_weight = 0;
 			for (int i = 0; i < histogram.size(); ++i) {
+				//System.out.println(" Hist ent: [" + histogram.get(i).weight +
+				//	"] = " + histogram.get(i).diff);
 				if (histogram.get(i).weight >= best_weight && (histogram.get(i).diff - turnHint) < 1) {
 					best_weight = histogram.get(i).weight;
 					best_index = i;
@@ -724,8 +730,18 @@ public class mapping {
 
 	///////////////////////////////////////////////////////
 
+	public ArrayList<MapSegment> getSegments() {
+		return allSegments;
+	}
+	public Vec getPosition() {
+		return robotPosition;
+	}
+	public float getAngle() {
+		return robotAngle;
+	}
+
 	public mapping() {
-		
+
 	}
 
 	public void init() {
@@ -769,6 +785,7 @@ public class mapping {
 			//
 			mergeGeometry(points, segments);
 		} else {
+			System.out.println("Failed to update linear");
 			deleteFeatures(points, segments);
 		}
 	}
