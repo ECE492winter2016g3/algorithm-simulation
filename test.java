@@ -85,7 +85,7 @@ class test {
 				Scanner ln = new Scanner(line);
 				ln.useDelimiter(",");
 				angles[i] = Float.parseFloat(ln.next());
-				distances[i] = Float.parseFloat(ln.next());
+				distances[i] = Float.parseFloat(ln.next()) + 8.0f;
 				++i;
 			}
 		} catch (FileNotFoundException e) {
@@ -125,7 +125,7 @@ class test {
 
 		m.init();
 
-		testSweep("initial.scan", angles, distances);
+		testSweep("data/data1init.csv", angles, distances);
 		m.initialScan(angles, distances);
 
 		// for (int i = 0; i < 12; ++i) {
@@ -165,6 +165,12 @@ class test {
 		cmd.add("circle " + 
 			(m.getPosition().x-3+300) + "," + (m.getPosition().y-3+300) + " " +
 			(m.getPosition().x+3+300) + "," + (m.getPosition().y+3+300));
+		cmd.add("-stroke");
+		cmd.add("black");
+		cmd.add("-draw");
+		cmd.add("line " + (300+m.getPosition().x) + "," + (300+m.getPosition().y) + " " + 
+			(m.getPosition().x + 300 + (float)Math.cos(m.getAngle()) * 20) + "," +
+			(m.getPosition().y + 300 + (float)Math.sin(m.getAngle()) * 20));
 		cmd.add("test1.png");
 		try {
 			Runtime r = Runtime.getRuntime();
@@ -175,7 +181,7 @@ class test {
 			System.out.println("Couldn't output: ");
 		}
 
-		testSweep("drive.scan", angles, distances);
+		testSweep("data/data1fwd.csv", angles, distances);
 		m.updateLin(angles, distances);
 
 		cmd = 
@@ -204,6 +210,12 @@ class test {
 		cmd.add("circle " + 
 			(m.getPosition().x-3+300) + "," + (m.getPosition().y-3+300) + " " +
 			(m.getPosition().x+3+300) + "," + (m.getPosition().y+3+300));
+		cmd.add("-stroke");
+		cmd.add("black");
+		cmd.add("-draw");
+		cmd.add("line " + (300+m.getPosition().x) + "," + (300+m.getPosition().y) + " " + 
+			(m.getPosition().x + 300 + (float)Math.cos(m.getAngle()) * 20) + "," +
+			(m.getPosition().y + 300 + (float)Math.sin(m.getAngle()) * 20));
 		cmd.add("test2.png");	
 		try {
 			Runtime r = Runtime.getRuntime();
@@ -214,7 +226,7 @@ class test {
 			System.out.println("Couldn't output: ");
 		}
 
-		testSweep("turn.scan", angles, distances);
+		testSweep("data/data1rot.csv", angles, distances);
 		m.updateRot(angles, distances, 0);
 
 		cmd = 
@@ -243,6 +255,12 @@ class test {
 		cmd.add("circle " + 
 			(m.getPosition().x-3+300) + "," + (m.getPosition().y-3+300) + " " +
 			(m.getPosition().x+3+300) + "," + (m.getPosition().y+3+300));
+		cmd.add("-stroke");
+		cmd.add("black");
+		cmd.add("-draw");
+		cmd.add("line " + (300+m.getPosition().x) + "," + (300+m.getPosition().y) + " " + 
+			(m.getPosition().x + 300 + (float)Math.cos(m.getAngle()) * 20) + "," +
+			(m.getPosition().y + 300 + (float)Math.sin(m.getAngle()) * 20));
 		cmd.add("test3.png");	
 		try {
 			Runtime r = Runtime.getRuntime();

@@ -165,6 +165,36 @@ public class mapping {
 		}
 	}
 
+	/* Move points from one segment to a consecutive one near a corner */
+	void balanceSegmentCorner(MapSegment a, MapSegment b) {
+		boolean didMovePoint = false; // Until contested
+		for (int i = 0; i < a.pointList.size(); ++i) {
+			MapPoint point = a.pointList.get(i);
+			Vec relpt = sub(point.position, b.origin);
+			float len = b.vec.length();
+			float projLenB = dot(relpt, b.vec) / len;
+			float perpDistB = sub(relpt, mul(projLenB / len, b.vec)).length();
+			if (projLenB > -LIDAR_VARIANCE && projLenB < len+LIDAR_VARIANCE) {
+				// Can move onto B, but is it closer?
+				relpt = sub(point.position, a.origin);
+				len = a.vec.length();
+				float projLenA = dot(relpt, a.vec) / len;
+				float perpDistA = sub(relpt, mul(projLenA / len, a.vec)).length();
+				// Choose
+				if (perpDistB < perpDistA) {
+					b.pointList.add(point);
+					a.pointList.remove(i);
+					--i;
+					didMovePoint = true;
+				}			
+			}
+		}
+		if (didMovePoint) {
+			regressSegment(a);
+			regressSegment(b);
+		}
+	}
+
 	/* Do feature extraction */
 	void featureExtract( 
 		ArrayList<MapPoint> points, ArrayList<MapSegment> segments, 
@@ -247,6 +277,9 @@ public class mapping {
 						seg.pointList.add(point);
 					}
 					regressSegment(seg);
+					// Balance the segments
+					if (segments.size() > 1)
+						balanceSegmentCorner(segments.get(segments.size()-2), segments.get(segments.size()-1));
 					segments.add(seg);
 
 					// New start index is i *minus one*, because the end point
@@ -273,6 +306,10 @@ public class mapping {
 				// Nothing to do, just keep extending the current line segment
 			}
 		}
+
+		// Balance the last / first seg
+		if (segments.size() > 2)
+			balanceSegmentCorner(segments.get(segments.size()-1), segments.get(0));
 	}
 
 
@@ -430,20 +467,29 @@ public class mapping {
 		public int count;
 	}
 
+/*
 	int linearMotionProcess(ArrayList<Vec> points) {
 		return 0;
 	}
+*/
 
 	// Process linear motion (post rotation tweaking)
 	// Returns: 0 - success
 	//          -1 - couldn't reckon position, don't add geometry
-	int linearmotion_process(ArrayList<MapSegment> segments) {
+	int linearmotion_process(ArrayList<MapSegment> segments, float tweakedRot) {
 		// Histogram of differences
 		ArrayList<HistEntry> histogram = new ArrayList<HistEntry>();
 		int hist_cap = 10;
 
 		// Dir of movement
 		Vec u = Vec.fromAngle(robotAngle);
+
+		// Weight based on the longest segment
+		float longestSegLength = 0;
+		for (MapSegment to_match: segments) {
+			float len = to_match.vec.length();
+			longestSegLength = Math.max(longestSegLength, len);
+		}
 
 		for (MapSegment to_match: segments) {
 			// Try to match to a segment with a very similar rotation, and 
@@ -469,6 +515,9 @@ public class mapping {
 					// Now scale that up for the final movement along the direction of travel
 					float dirlen = perplen / frac;
 
+					// Weight based on length and frac
+					float weight = frac * (to_match.vec.length() / longestSegLength);
+
 					// Note: When frac is small, dirlen will be large, and errors will be
 					// scaled up, so use frac as the weight of a measurement
 					// Add the dirlen to the histogram
@@ -482,7 +531,7 @@ public class mapping {
 						for (int i = 0; i < histogram.size(); ++i) {
 							HistEntry entry = histogram.get(i);
 							if (Math.abs(entry.diff - dirlen) < 3*LIDAR_VARIANCE) {
-								entry.weight += frac;
+								entry.weight += weight;
 								entry.count++;
 								entry.total += dirlen;
 								added = true;
@@ -498,7 +547,7 @@ public class mapping {
 							if (histogram.size() < hist_cap) {
 								// Add a new entry
 								HistEntry entry = new HistEntry();
-								entry.weight = frac;
+								entry.weight = weight;
 								entry.diff = dirlen;
 								entry.total = dirlen;
 								entry.count = 1;
@@ -507,7 +556,7 @@ public class mapping {
 								// Try replacing the least weight entry
 								if (frac > leastWeight) {
 									HistEntry entry = histogram.get(leastWeightIndex);
-									entry.weight = frac;
+									entry.weight = weight;
 									entry.diff = dirlen;
 									entry.total = dirlen;
 									entry.count = 1;
@@ -537,6 +586,9 @@ public class mapping {
 			}
 			float best_diff = histogram.get(best_index).total / histogram.get(best_index).count;
 			robotPosition.add(mul(u, best_diff));
+			Vec v = new Vec(-u.y, u.x);
+			// Assumed perpendicular
+			robotPosition.add(mul(v, best_diff*(float)Math.sin(tweakedRot)));
 			System.out.println("Linearmotion moved " + best_diff);
 			return 0;
 		}
@@ -546,7 +598,7 @@ public class mapping {
 	// Merge in a line segment adding it to the state
 	void mergeSegment(MapSegment seg) {
 		// Try to find a colinear line segment to merge with
-		 boolean merged = false;
+		boolean merged = false;
 		for (MapSegment cand: allSegments) {
 			// First, point the two segments in the same direction
 			if (dot(cand.vec, seg.vec) < 0.0f) {
@@ -832,7 +884,7 @@ public class mapping {
 		//
 		oldPos = robotPosition.copy();
 		oldTheta = robotAngle;
-		if (linearmotion_process(segments) == 0) {
+		if (linearmotion_process(segments, rotChange) == 0) {
 			// If we could process the linear motion, update the map
 			updateFeatures(oldPos, oldTheta, points, segments);
 			//
