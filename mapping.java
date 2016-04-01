@@ -3,15 +3,17 @@ import java.util.ArrayList;
 import java.lang.Math;
 
 public class mapping {
+	public static float PI = 3.1415926535f;
+
 	/* Broad phase is a 10x10 grid of 100x100 cm squares */
 	public static int BROAD_STEPS = 10;
 	public static float BROAD_SIZE = 100.0f;
 
 	/* Variance in the lidar range from the true value is +- 1cm */
-	public static float LIDAR_VARIANCE = 1.5f;
+	public static float LIDAR_VARIANCE = 4.0f;
 
 	/* Max number of samples in a sweep by the sensor */
-	public static int SWEEP_COUNT = 50;
+	public static int SWEEP_COUNT = 180;
 
 	/* Maximum amount the robot can turn by during linear movement (1 / 30th turn | 12 deg) */
 	public static float TURN_TWEAK = ((float)Math.PI * 2.0f / 30.0f);
@@ -197,16 +199,19 @@ public class mapping {
 			if (i == angles.length) {
 				// Final iteration, always fail
 				failed = true;
-			} else if (thisDifference > 1.6*lastDifference
-				|| thisDifference < 0.625*lastDifference) {
-				// Not following a smooth wall
+			// } else if (thisDifference > 1.6*lastDifference
+			// 	|| thisDifference < 0.625*lastDifference) {
+			// 	// Not following a smooth wall
+			// 	failed = true;
+			} else if (thisDifference > 2*LIDAR_VARIANCE) {
+				// Points too spread out
 				failed = true;
 			} else {
 				// Normal iteration behavior
 				Vec u = sub(pts.get(i), pts.get(start_index));
 				u.normalize();
 				Vec t = sub(pts.get(i), robotPosition); // Direction from robot to edge
-				if (absangle_between(u, t) < 0.5) {
+				if (absangle_between(u, t) < 0.3) {
 					// Line seg is at too great an angle to us, don't use it
 					failed = true;
 				} else {
@@ -344,29 +349,48 @@ public class mapping {
 
 
 	// Tweak the rotation of the robot by a small amount to best match 
-	void rotationTweak(ArrayList<MapSegment> segments) {
+	float rotationTweak(ArrayList<MapSegment> segments) {
 		// For each segment in the list, try to find a segment in the map that
 		// has a very similar rotation, and is somewhat nearby.
 
 		Vec tot = new Vec(); // Total correction to make to the robot unit vector
-		int totcount = 0;
+		float totcount = 0;
+
+		// Longest seg length squared
+		float longestSegLength = 0;
+		for (MapSegment to_match: segments) {
+			longestSegLength = Math.max(longestSegLength, to_match.vec.length());
+		}
+		longestSegLength = longestSegLength*longestSegLength;
 
 		for (MapSegment to_match: segments) {
-			// Find a similarly rotated segment
+			// Find the most similar length segment within the turn tweak
 			MapSegment best_match = null;
-			float best_theta = 10000.0f;
-			// TODO: Only search segments that are realistic candidates
+			float best_length_diff = 10000;
 			for (MapSegment a_match: allSegments) {
 				float angle = absangle_between(a_match.vec, to_match.vec);
-				if (angle < best_theta) {
-					best_theta = angle;
+				float lengthDiff = Math.abs(a_match.vec.length() - best_length_diff);
+				if (angle < TURN_TWEAK && lengthDiff < best_length_diff) {
+					best_length_diff = lengthDiff;
 					best_match = a_match;
 				}
 			}
 
-			// If there is a match within the turn tweak amount, get the delta
-			if (best_theta < TURN_TWEAK) {
-				// Let <a,b> = unit vector to turn towards
+			// If there are none within, try for double the turn tweak
+			if (best_match == null) {
+				for (MapSegment a_match: allSegments) {
+					float angle = absangle_between(a_match.vec, to_match.vec);
+					float lengthDiff = Math.abs(a_match.vec.length() - best_length_diff);
+					if (angle < 2*TURN_TWEAK && lengthDiff < best_length_diff) {
+						best_length_diff = lengthDiff;
+						best_match = a_match;
+					}
+				}			
+			}
+
+			// Add the weighted result to the total turn tweak
+			// Let <a,b> = unit vector to turn towards
+			if (best_match != null) {
 				Vec a = best_match.vec.copy();
 				if (dot(best_match.vec, to_match.vec) < 0) {
 					a.negate();
@@ -377,17 +401,25 @@ public class mapping {
 				Vec b = to_match.vec.copy();
 				b.normalize();
 
+				// Weight based on length
+				float len = to_match.vec.length();
+				len *= len; // squared
+				float weight = len / longestSegLength;
+
 				// Add the difference to the modifier
-				tot.add(sub(a, b));
-				++totcount;
+				tot.add(mul(weight, sub(a, b)));
+				totcount += weight;
 			}
 		}
 
 		// Modify the robot rotation
+		float oldAngle = robotAngle;
 		Vec u = Vec.fromAngle(robotAngle);
 		u.normalize();
 		u.add(mul(tot, 1.0f/totcount));
 		robotAngle = (float)Math.atan2(u.y, u.x);
+		System.out.println("RotationTweak by: " + (robotAngle - oldAngle));
+		return (robotAngle - oldAngle);
 	}
 
 	// hist -> histogram
@@ -396,6 +428,10 @@ public class mapping {
 		public float diff;
 		public float total;
 		public int count;
+	}
+
+	int linearMotionProcess(ArrayList<Vec> points) {
+		return 0;
 	}
 
 	// Process linear motion (post rotation tweaking)
@@ -510,7 +546,7 @@ public class mapping {
 	// Merge in a line segment adding it to the state
 	void mergeSegment(MapSegment seg) {
 		// Try to find a colinear line segment to merge with
-		boolean merged = false;
+		 boolean merged = false;
 		for (MapSegment cand: allSegments) {
 			// First, point the two segments in the same direction
 			if (dot(cand.vec, seg.vec) < 0.0f) {
@@ -590,6 +626,8 @@ public class mapping {
 		// Attach the points
 		for (MapSegment seg: segments)
 			mergeSegment(seg);
+
+		System.out.println("Merged, now, Segments: " + segments.size());
 	}
 
 
@@ -598,6 +636,13 @@ public class mapping {
 		// Histogram of differences
 		ArrayList<HistEntry> histogram = new ArrayList<HistEntry>();
 		int hist_cap = 10;
+
+		// Weight based on the longest segment
+		float longestSegLength = 0;
+		for (MapSegment to_match: segments) {
+			float len = to_match.vec.length();
+			longestSegLength = Math.max(longestSegLength, len);
+		}
 
 		for (MapSegment to_match: segments) {
 			//std::cout << "Rot motion to match...\n";
@@ -613,6 +658,8 @@ public class mapping {
 				pdist1 = length(d.x - frac*to_match.vec.x, d.y - frac*to_match.vec.y);
 			}
 			float theta1 = (float)Math.atan2(to_match.vec.y, to_match.vec.x);
+			while (theta1 < 0) theta1 += PI;
+			//System.out.println("Match " + pdist1 + " (theta=" + theta1 + ") with:");
 
 			// Try to match to a segment with a very similar perpendicular distance
 			// to the robot
@@ -627,20 +674,20 @@ public class mapping {
 					pdist2 = length(d.x - frac*a_match.vec.x, d.y - frac*a_match.vec.y);
 				}
 				float theta2 = (float)Math.atan2(a_match.vec.y, a_match.vec.x);
-				if (Math.abs(pdist1 - pdist2) < 3*LIDAR_VARIANCE) {
+				while (theta2 < 0) theta2 += PI; 
+				if (Math.abs(pdist1 - pdist2) < 2*LIDAR_VARIANCE) {
 					// Is a candidate, compute the angluar difference between the two
 					float dtheta = theta2 - theta1;
+					if (dtheta < 0) dtheta += PI;
 
-					// Force positive difference
-					if (dtheta < -3.14159253f)
-						dtheta += 3.141592653f;
-					if (dtheta > 3.14159253f)
-						dtheta -= 3.14159253f;
+
+					//System.out.println(" " + pdist2 + " (theta=" + theta2 + ") del = " + dtheta);
 
 					// Now, we have to calculate how reliable the measurement is, off
 					// of how oblique the distance to the feature is
-					// TODO: Implement, for now just weights everything 1
-					float weight = 1.0f;
+					// Use the fraction of the longest to match segment's length
+					float len = to_match.vec.length();
+					float weight = len / longestSegLength;
 
 					// Note: When frac is small, dirlen will be large, and errors will be
 					// scaled up, so use frac as the weight of a measurement
@@ -704,14 +751,17 @@ public class mapping {
 			for (int i = 0; i < histogram.size(); ++i) {
 				//System.out.println(" Hist ent: [" + histogram.get(i).weight +
 				//	"] = " + histogram.get(i).diff);
-				if (histogram.get(i).weight >= best_weight && (histogram.get(i).diff - turnHint) < 1) {
+				if (histogram.get(i).weight >= best_weight) {
 					best_weight = histogram.get(i).weight;
 					best_index = i;
 					found_within_hint = true;
 				}
 			}
 			if (found_within_hint) {
+				//System.out.println("Best: " + histogram.get(best_index).diff);
 				float best_diff = histogram.get(best_index).total / histogram.get(best_index).count;
+				//best_diff = -best_diff;
+				// Adjust to hint
 				robotAngle += best_diff;
 				System.out.println("Note: Rotation motion moved by " + best_diff);
 				return 0;
@@ -774,7 +824,7 @@ public class mapping {
 		//    the global map state
 		Vec oldPos = robotPosition.copy();
 		float oldTheta = robotAngle;
-		rotationTweak(segments);
+		float rotChange = rotationTweak(segments);
 		updateFeatures(oldPos, oldTheta, points, segments);
 		//
 		oldPos = robotPosition.copy();

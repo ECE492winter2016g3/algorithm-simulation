@@ -1,7 +1,7 @@
 
-import java.util.ArrayList;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.lang.Float;
+import java.io.*;
+import java.util.*;
 
 class test {
 	static class line {
@@ -12,6 +12,7 @@ class test {
 	}
 
 	static ArrayList<mapping.Vec> shape = new ArrayList<mapping.Vec>();
+	//static ArrayList<float> angles = new ArrayList<float>();
 	static ArrayList<line> lines = new ArrayList<line>();
 	static {
 		shape.add(new mapping.Vec(2, 2));
@@ -75,33 +76,56 @@ class test {
 	}
 
 
-	public static void main(String[] args) {
-		// Init
-		int count = 50;
-		float[] angles = new float[count];
-		for (int i = 0; i < count; ++i) {
-			float angle = (i/50.0f) * ((float)Math.PI*2.0f);
-			angles[i] = angle;
+	public static void testSweep(String filename, float[] angles, float[] distances) {
+		try {
+			Scanner s = new Scanner(new File(filename));
+			int i = 0;
+			while (s.hasNextLine()) {
+				String line = s.nextLine();
+				Scanner ln = new Scanner(line);
+				ln.useDelimiter(",");
+				angles[i] = Float.parseFloat(ln.next());
+				distances[i] = Float.parseFloat(ln.next());
+				++i;
+			}
+		} catch (FileNotFoundException e) {
+			System.out.println("Couldn't open " + filename);
 		}
+	}
 
-		// Sweep
-		float[] distances = sweep(angles);
+
+	public static void main(String[] args) {
+		// // Init
+		// int count = 50;
+		// float[] angles = new float[count];
+		// for (int i = 0; i < count; ++i) {
+		// 	float angle = (i/50.0f) * ((float)Math.PI*2.0f);
+		// 	angles[i] = angle;
+		// }
+
+		// // Sweep
+		// float[] distances = sweep(angles);
+		float[] angles = new float[180];
+		float[] distances = new float[180]; 
 
 		// Print
-		String out = "convert -size 200x200 xc:white -fill black -stroke black ";
-		for (int i = 0; i < count; ++i) {
-			int tx = (int)(100 + x + (float)Math.cos(angles[i])*distances[i]);
-			int ty = (int)(100 + y + (float)Math.sin(angles[i])*distances[i]);
-			out = out + "-draw \"circle " + (tx-1) + "," + (ty-1) + " "
-				+ (tx+1) + "," + (ty+1) + "\" ";
-		}
-		out = out + "test.png";
+		// String out = "convert -size 200x200 xc:white -fill black -stroke black ";
+		// for (int i = 0; i < count; ++i) {
+		// 	int tx = (int)(100 + x + (float)Math.cos(angles[i])*distances[i]);
+		// 	int ty = (int)(100 + y + (float)Math.sin(angles[i])*distances[i]);
+		// 	out = out + "-draw \"circle " + (tx-1) + "," + (ty-1) + " "
+		// 		+ (tx+1) + "," + (ty+1) + "\" ";
+		// }
+		// out = out + "test.png";
 		//System.out.println(out);
+
 
 		// Mapping
 		mapping m = new mapping();
 
 		m.init();
+
+		testSweep("initial.scan", angles, distances);
 		m.initialScan(angles, distances);
 
 		// for (int i = 0; i < 12; ++i) {
@@ -111,34 +135,122 @@ class test {
 		// 	System.out.println("-> x = " + m.getPosition().x);
 		// }
 
-		theta -= (float)(Math.PI / 6);
-		distances = sweep(angles);
-		m.updateRot(angles, distances, (float)-(Math.PI / 4));
+		// theta -= (float)(Math.PI / 6);
+		// distances = sweep(angles);
+		// m.updateRot(angles, distances, (float)-(Math.PI / 4));
 
-		String map = "convert -size 200x200 xc:white -fill black -stroke black ";
-		for (mapping.MapSegment seg: m.getSegments()) {
-			map = map + "-draw \"line " +
-				(100+seg.origin.x) + "," + (100+seg.origin.y) + " " +
-				(100+seg.origin.x + seg.vec.x) + "," + (100+seg.origin.y + seg.vec.y) + "\" ";
+		ArrayList<String> cmd = 
+			new ArrayList<String>(Arrays.asList("convert", 
+				"-size", "800x600", "xc:white", "-fill", "red", "-stroke", "black"));
+		for (int i = 0; i < 180; ++i) {
+			int x = 2*(int)((float)Math.cos(angles[i]) * distances[i]);
+			int y = 2*(int)((float)Math.sin(angles[i]) * distances[i]);
+			cmd.add("-draw");
+			cmd.add("circle " + (300+x-1) + "," + (300+y-1) + " " + (300+x+1) + "," + (300+y+1));
 		}
-		map = map + "test.png";
-		System.out.println(map);
-
+		cmd.add("-stroke");
+		cmd.add("blue");
+		cmd.add("-strokewidth");
+		cmd.add("2");
+		for (mapping.MapSegment seg: m.getSegments()) {
+			cmd.add("-draw");
+			cmd.add("line " + (300+2*seg.origin.x) + "," + (300+2*seg.origin.y) + " " +
+				(300+2*seg.origin.x + 2*seg.vec.x) + "," + (300+2*seg.origin.y + 2*seg.vec.y));
+		}
+		cmd.add("-stroke");
+		cmd.add("black");
+		cmd.add("-fill");
+		cmd.add("black");
+		cmd.add("-draw");
+		cmd.add("circle " + 
+			(m.getPosition().x-3+300) + "," + (m.getPosition().y-3+300) + " " +
+			(m.getPosition().x+3+300) + "," + (m.getPosition().y+3+300));
+		cmd.add("test1.png");
 		try {
 			Runtime r = Runtime.getRuntime();
-			Process p = r.exec(map);
+			Process p = r.exec(cmd.toArray(new String[0]));
 			p.waitFor();
-			BufferedReader b = new BufferedReader(new InputStreamReader(p.getInputStream()));
-			String line = "";
-
-			while ((line = b.readLine()) != null) {
-			  System.out.println(line);
-			}
-
-			b.close();
 			System.out.println("Output");
 		} catch (Exception e) {
-			System.out.println("Couldn't output");
+			System.out.println("Couldn't output: ");
+		}
+
+		testSweep("drive.scan", angles, distances);
+		m.updateLin(angles, distances);
+
+		cmd = 
+			new ArrayList<String>(Arrays.asList("convert", 
+				"-size", "800x600", "xc:white", "-fill", "red", "-stroke", "black"));
+		for (int i = 0; i < 180; ++i) {
+			int x = 2*(int)((float)Math.cos(angles[i] + m.getAngle()) * distances[i] + m.getPosition().x);
+			int y = 2*(int)((float)Math.sin(angles[i] + m.getAngle()) * distances[i] + m.getPosition().y);
+			cmd.add("-draw");
+			cmd.add("circle " + (300+x-1) + "," + (300+y-1) + " " + (300+x+1) + "," + (300+y+1));
+		}
+		cmd.add("-stroke");
+		cmd.add("blue");
+		cmd.add("-strokewidth");
+		cmd.add("2");
+		for (mapping.MapSegment seg: m.getSegments()) {
+			cmd.add("-draw");
+			cmd.add("line " + (300+2*seg.origin.x) + "," + (300+2*seg.origin.y) + " " +
+				(300+2*seg.origin.x + 2*seg.vec.x) + "," + (300+2*seg.origin.y + 2*seg.vec.y));
+		}
+		cmd.add("-stroke");
+		cmd.add("black");
+		cmd.add("-fill");
+		cmd.add("black");
+		cmd.add("-draw");
+		cmd.add("circle " + 
+			(m.getPosition().x-3+300) + "," + (m.getPosition().y-3+300) + " " +
+			(m.getPosition().x+3+300) + "," + (m.getPosition().y+3+300));
+		cmd.add("test2.png");	
+		try {
+			Runtime r = Runtime.getRuntime();
+			Process p = r.exec(cmd.toArray(new String[0]));
+			p.waitFor();
+			System.out.println("Output");
+		} catch (Exception e) {
+			System.out.println("Couldn't output: ");
+		}
+
+		testSweep("turn.scan", angles, distances);
+		m.updateRot(angles, distances, 0);
+
+		cmd = 
+			new ArrayList<String>(Arrays.asList("convert", 
+				"-size", "800x600", "xc:white", "-fill", "red", "-stroke", "black"));
+		for (int i = 0; i < 180; ++i) {
+			int x = 2*(int)((float)Math.cos(angles[i] + m.getAngle()) * distances[i] + m.getPosition().x);
+			int y = 2*(int)((float)Math.sin(angles[i] + m.getAngle()) * distances[i] + m.getPosition().y);
+			cmd.add("-draw");
+			cmd.add("circle " + (300+x-1) + "," + (300+y-1) + " " + (300+x+1) + "," + (300+y+1));
+		}
+		cmd.add("-stroke");
+		cmd.add("blue");
+		cmd.add("-strokewidth");
+		cmd.add("2");
+		for (mapping.MapSegment seg: m.getSegments()) {
+			cmd.add("-draw");
+			cmd.add("line " + (300+2*seg.origin.x) + "," + (300+2*seg.origin.y) + " " +
+				(300+2*seg.origin.x + 2*seg.vec.x) + "," + (300+2*seg.origin.y + 2*seg.vec.y));
+		}
+		cmd.add("-stroke");
+		cmd.add("black");
+		cmd.add("-fill");
+		cmd.add("black");
+		cmd.add("-draw");
+		cmd.add("circle " + 
+			(m.getPosition().x-3+300) + "," + (m.getPosition().y-3+300) + " " +
+			(m.getPosition().x+3+300) + "," + (m.getPosition().y+3+300));
+		cmd.add("test3.png");	
+		try {
+			Runtime r = Runtime.getRuntime();
+			Process p = r.exec(cmd.toArray(new String[0]));
+			p.waitFor();
+			System.out.println("Output");
+		} catch (Exception e) {
+			System.out.println("Couldn't output: ");
 		}
 
 		System.out.println("Test");
