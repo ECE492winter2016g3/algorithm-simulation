@@ -762,6 +762,9 @@ public class mapping {
 				float best_diff = histogram.get(best_index).total / histogram.get(best_index).count;
 				//best_diff = -best_diff;
 				// Adjust to hint
+				if (turnHint < 0) {
+					best_diff -= PI;
+				}
 				robotAngle += best_diff;
 				System.out.println("Note: Rotation motion moved by " + best_diff);
 				return 0;
