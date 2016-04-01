@@ -1,8 +1,12 @@
+// package com.example.corey.bluetoothtest;
+
+import android.util.Log;
 
 import java.util.ArrayList;
 import java.lang.Math;
 
 public class mapping {
+	public int currentSweep = 0;
 	public static float PI = 3.1415926535f;
 
 	/* Broad phase is a 10x10 grid of 100x100 cm squares */
@@ -10,7 +14,7 @@ public class mapping {
 	public static float BROAD_SIZE = 100.0f;
 
 	/* Variance in the lidar range from the true value is +- 1cm */
-	public static float LIDAR_VARIANCE = 4.0f;
+	public static float LIDAR_VARIANCE = 3.0f;
 
 	/* Max number of samples in a sweep by the sensor */
 	public static int SWEEP_COUNT = 180;
@@ -71,14 +75,16 @@ public class mapping {
 	}
 
 	public static class MapSegment {
-		public MapSegment() {
+		public MapSegment(int sweep) {
 			pointList = new ArrayList<MapPoint>();
 			origin = new Vec();
 			vec = new Vec();
+			created = sweep;
 		}
 		public ArrayList<MapPoint> pointList;
 		public Vec origin;
 		public Vec vec;
+		public int created;
 	}
 	/* Dot product */
 	float dot(Vec a, Vec b) {
@@ -186,7 +192,7 @@ public class mapping {
 					a.pointList.remove(i);
 					--i;
 					didMovePoint = true;
-				}			
+				}
 			}
 		}
 		if (didMovePoint) {
@@ -196,9 +202,9 @@ public class mapping {
 	}
 
 	/* Do feature extraction */
-	void featureExtract( 
-		ArrayList<MapPoint> points, ArrayList<MapSegment> segments, 
-		float angles[], float distances[]) 
+	void featureExtract(
+			ArrayList<MapPoint> points, ArrayList<MapSegment> segments,
+			float angles[], float distances[])
 	{
 		// First, extract the global X/Y coordinates
 		ArrayList<Vec> pts = new ArrayList<Vec>();
@@ -270,7 +276,7 @@ public class mapping {
 				if ((i - start_index) > 2) {
 					// Emit the points start_index up to i - 1
 					// (i is the index that we failed to extend to)
-					MapSegment seg = new MapSegment();
+					MapSegment seg = new MapSegment(currentSweep);
 					for (int j = start_index; j < i; ++j) {
 						MapPoint point = new MapPoint();
 						point.position = pts.get(j).copy();
@@ -292,7 +298,7 @@ public class mapping {
 					++start_index;
 					start_is_in_segment = false;
 				} else {
-					// Emit the start_index point individually and advance the 
+					// Emit the start_index point individually and advance the
 					// start index by one.
 					MapPoint pt = new MapPoint();
 					pt.position = pts.get(start_index).copy();
@@ -322,7 +328,7 @@ public class mapping {
 	// Update a set of features based on a change in position / rotation of the robot
 	// (Subtract, rotate, add)
 	void updateFeatures(Vec oldPos, float oldTheta,
-		ArrayList<MapPoint> points, ArrayList<MapSegment> segments) 
+						ArrayList<MapPoint> points, ArrayList<MapSegment> segments)
 	{
 		// Change
 		float dTheta = robotAngle - oldTheta;
@@ -385,7 +391,7 @@ public class mapping {
 	}
 
 
-	// Tweak the rotation of the robot by a small amount to best match 
+	// Tweak the rotation of the robot by a small amount to best match
 	float rotationTweak(ArrayList<MapSegment> segments) {
 		// For each segment in the list, try to find a segment in the map that
 		// has a very similar rotation, and is somewhat nearby.
@@ -422,7 +428,7 @@ public class mapping {
 						best_length_diff = lengthDiff;
 						best_match = a_match;
 					}
-				}			
+				}
 			}
 
 			// Add the weighted result to the total turn tweak
@@ -455,7 +461,7 @@ public class mapping {
 		u.normalize();
 		u.add(mul(tot, 1.0f/totcount));
 		robotAngle = (float)Math.atan2(u.y, u.x);
-		System.out.println("RotationTweak by: " + (robotAngle - oldAngle));
+		Log.i("Mapping", "RotationTweak by: " + (robotAngle - oldAngle));
 		return (robotAngle - oldAngle);
 	}
 
@@ -492,14 +498,14 @@ public class mapping {
 		}
 
 		for (MapSegment to_match: segments) {
-			// Try to match to a segment with a very similar rotation, and 
+			// Try to match to a segment with a very similar rotation, and
 			// a small linear difference along the direction of supposed motion
 			// (the current theta)
 			for (MapSegment a_match: allSegments) {
 				if (absangle_between(to_match.vec, a_match.vec) < TURN_TWEAK) {
 					// Is a candidate, compute the distance to it
-					// First compute the perpendicular vector from segment to match 
-					// = (match.o - seg.o) projected onto (perp seg.v, in the direction of movement) 
+					// First compute the perpendicular vector from segment to match
+					// = (match.o - seg.o) projected onto (perp seg.v, in the direction of movement)
 					Vec d = sub(a_match.origin, to_match.origin);
 					Vec perp = new Vec(-to_match.vec.y, to_match.vec.x);
 
@@ -571,13 +577,13 @@ public class mapping {
 		// Now find the highest weight item in the histogram and move the robot's
 		// reckoned position by that much
 		if (histogram.size() == 0) {
-			System.out.println("Error: No features found to reckon based on");
+			Log.i("Mapping", "Error: No features found to reckon based on");
 			return -1;
 		} else {
 			int best_index = 0;
 			float best_weight = 0;
 			for (int i = 0; i < histogram.size(); ++i) {
-				//System.out.println(" Hist ent: [" + histogram.get(i).weight +
+				//Log.i("Mapping", " Hist ent: [" + histogram.get(i).weight +
 				//	"] = " + histogram.get(i).diff);
 				if (histogram.get(i).weight >= best_weight) {
 					best_weight = histogram.get(i).weight;
@@ -589,7 +595,7 @@ public class mapping {
 			Vec v = new Vec(-u.y, u.x);
 			// Assumed perpendicular
 			robotPosition.add(mul(v, best_diff*(float)Math.sin(tweakedRot)));
-			System.out.println("Linearmotion moved " + best_diff);
+			Log.i("Mapping", "Linearmotion moved " + best_diff);
 			return 0;
 		}
 	}
@@ -598,7 +604,7 @@ public class mapping {
 	// Merge in a line segment adding it to the state
 	void mergeSegment(MapSegment seg) {
 		// Try to find a colinear line segment to merge with
-		boolean merged = false;
+		 boolean merged = false;
 		for (MapSegment cand: allSegments) {
 			// First, point the two segments in the same direction
 			if (dot(cand.vec, seg.vec) < 0.0f) {
@@ -618,7 +624,7 @@ public class mapping {
 			Vec u = cand.vec.copy();
 			u.normalize();
 			float p1 = dot(sub(seg.origin, cand.origin), u);
-			float d1 = sub(seg.origin, add(cand.origin, mul(u, p1))).length(); 
+			float d1 = sub(seg.origin, add(cand.origin, mul(u, p1))).length();
 			float p2 = dot(sub(add(seg.origin, seg.vec), cand.origin), u);
 			float d2 = sub(add(seg.origin, seg.vec), add(cand.origin, mul(u, p2))).length();
 
@@ -630,19 +636,19 @@ public class mapping {
 
 			// Relatively close test
 			float avglen = 0.5f*(seg.vec.length() + cand.vec.length());
-			boolean relativelyClose = 
-				(d1 < 0.1f*avglen) && (d2 < 0.2f*avglen) ||
-				(d1 < 0.2f*avglen) && (d2 < 0.1f*avglen);
+			boolean relativelyClose =
+					(d1 < 0.1f*avglen) && (d2 < 0.2f*avglen) ||
+							(d1 < 0.2f*avglen) && (d2 < 0.1f*avglen);
 
 			float tlen = cand.vec.length();
 			// Is one of the ends of the line seg touching the candidate?
 			boolean isTouching =  (d2 < 2*LIDAR_VARIANCE || d1 < 2*LIDAR_VARIANCE);
 			// Do the line segments overlap in projection?
 			float overlapSlop = 2*LIDAR_VARIANCE;
-			boolean projectionDoesOverlap = 
-				(p2 > -overlapSlop && p2 < tlen+overlapSlop) || 
-				(p1 > -overlapSlop && p1 < tlen+overlapSlop);
-			// 
+			boolean projectionDoesOverlap =
+					(p2 > -overlapSlop && p2 < tlen+overlapSlop) ||
+					(p1 > -overlapSlop && p1 < tlen+overlapSlop);
+			//
 			if ((projectionDoesOverlap && (isTouching || relativelyClose)) || doesIntersect) {
 				// We have an intersection. Add the points from seg to
 				// cand and re-regress it.
@@ -679,7 +685,7 @@ public class mapping {
 		for (MapSegment seg: segments)
 			mergeSegment(seg);
 
-		System.out.println("Merged, now, Segments: " + segments.size());
+		Log.i("Mapping", "Merged, now, Segments: " + segments.size());
 	}
 
 
@@ -711,7 +717,7 @@ public class mapping {
 			}
 			float theta1 = (float)Math.atan2(to_match.vec.y, to_match.vec.x);
 			while (theta1 < 0) theta1 += PI;
-			//System.out.println("Match " + pdist1 + " (theta=" + theta1 + ") with:");
+			//Log.i("Mapping", "Match " + pdist1 + " (theta=" + theta1 + ") with:");
 
 			// Try to match to a segment with a very similar perpendicular distance
 			// to the robot
@@ -726,14 +732,13 @@ public class mapping {
 					pdist2 = length(d.x - frac*a_match.vec.x, d.y - frac*a_match.vec.y);
 				}
 				float theta2 = (float)Math.atan2(a_match.vec.y, a_match.vec.x);
-				while (theta2 < 0) theta2 += PI; 
+				while (theta2 < 0) theta2 += PI;
 				if (Math.abs(pdist1 - pdist2) < 2*LIDAR_VARIANCE) {
 					// Is a candidate, compute the angluar difference between the two
 					float dtheta = theta2 - theta1;
 					if (dtheta < 0) dtheta += PI;
 
-
-					//System.out.println(" " + pdist2 + " (theta=" + theta2 + ") del = " + dtheta);
+					//Log.i("Mapping", " " + pdist2 + " (theta=" + theta2 + ") del = " + dtheta);
 
 					// Now, we have to calculate how reliable the measurement is, off
 					// of how oblique the distance to the feature is
@@ -794,14 +799,14 @@ public class mapping {
 		// Now find the highest weight item in the histogram and move the robot's
 		// reckoned position by that much
 		if (histogram.size() == 0) {
-			System.out.println("Error: No features found to reckon based on");
+			Log.i("Mapping", "Error: No features found to reckon based on");
 			return -1;
 		} else {
 			boolean found_within_hint = false;
 			int best_index = 0;
 			float best_weight = 0;
 			for (int i = 0; i < histogram.size(); ++i) {
-				//System.out.println(" Hist ent: [" + histogram.get(i).weight +
+				//Log.i("Mapping", " Hist ent: [" + histogram.get(i).weight +
 				//	"] = " + histogram.get(i).diff);
 				if (histogram.get(i).weight >= best_weight) {
 					best_weight = histogram.get(i).weight;
@@ -810,18 +815,27 @@ public class mapping {
 				}
 			}
 			if (found_within_hint) {
-				//System.out.println("Best: " + histogram.get(best_index).diff);
+				//Log.i("Mapping", "Best: " + histogram.get(best_index).diff);
 				float best_diff = histogram.get(best_index).total / histogram.get(best_index).count;
 				//best_diff = -best_diff;
 				// Adjust to hint
+				Log.i("Mapping", "rotation pre modification: " + robotAngle);
+
+				while(turnHint > PI) {
+					turnHint -= 2 * PI;
+				}
+				while(turnHint < -PI) {
+					turnHint += 2 * PI;
+				}
 				if (turnHint < 0) {
+					Log.i("Mapping", "Adjusting best_diff from " + best_diff + " to " + (best_diff - PI));
 					best_diff -= PI;
 				}
 				robotAngle += best_diff;
-				System.out.println("Note: Rotation motion moved by " + best_diff);
+				Log.i("Mapping", "Note: Rotation motion moved by " + best_diff);
 				return 0;
 			} else {
-				System.out.println("Error: rotationalmotion not found within hint");
+				Log.i("Mapping", "Error: rotationalmotion not found within hint");
 				return -1;
 			}
 		}
@@ -849,6 +863,10 @@ public class mapping {
 
 	}
 
+	public int getCurrentSweep() {
+		return currentSweep;
+	}
+
 	public void init() {
 		robotAngle = 0;
 		robotPosition = new Vec();
@@ -863,6 +881,7 @@ public class mapping {
 	}
 
 	public void updateLin(float angles[], float distances[]) {
+		++currentSweep;
 		// First step is feature extraction, we need to break down the
 		// sensor input into points and segments (sequences of 3+ colinear points)
 		ArrayList<MapPoint> points = new ArrayList<MapPoint>();
@@ -874,7 +893,7 @@ public class mapping {
 		//    any minor rotations made during linear movement were quite small.
 		// 2) Once our rotation has been corrected, match up line segments to
 		//    to get a histogram of expected movements, and pick a heavily
-		//    median weighted actual movement from those 
+		//    median weighted actual movement from those
 		// 3) With our updated position, merge the new geometry into the
 		//    the global map state
 		Vec oldPos = robotPosition.copy();
@@ -890,12 +909,13 @@ public class mapping {
 			//
 			mergeGeometry(points, segments);
 		} else {
-			System.out.println("Failed to update linear");
+			Log.i("Mapping", "Failed to update linear");
 			deleteFeatures(points, segments);
 		}
 	}
 
 	public void updateRot(float angles[], float distances[], float turnHint) {
+		++currentSweep;
 		// First step is feature extraction, we need to break down the
 		// sensor input into points and segments (sequences of 3+ colinear points)
 		ArrayList<MapPoint> points = new ArrayList<MapPoint>();
@@ -924,5 +944,5 @@ public class mapping {
 			// Failure, don't know where we are
 			deleteFeatures(points, segments);
 		}
-	}	
+	}
 }
