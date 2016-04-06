@@ -93,6 +93,69 @@ class test {
 		}
 	}
 
+	static float orig = 400.0f;
+	static float scale = 0.3f;
+
+	public static void testOutput(float[] angles, float[] distances, mapping m, String filename) {
+		ArrayList<String> cmd = 
+			new ArrayList<String>(Arrays.asList("convert", 
+				"-size", "800x800", "xc:white", "-fill", "red", "-stroke", "black"));
+		for (int i = 0; i < 180; ++i) {
+			int x = (int)((float)Math.cos(angles[i] + m.getAngle()) * distances[i] + m.getPosition().x);
+			int y = (int)((float)Math.sin(angles[i] + m.getAngle()) * distances[i] + m.getPosition().y);
+			cmd.add("-draw");
+			cmd.add("circle " + (orig+scale*x-1) + "," + 
+				(orig+scale*y-1) + " " + (orig+scale*x+1) + "," + (orig+scale*y+1));
+		}
+		//
+		cmd.add("-stroke");
+		cmd.add("black");
+		cmd.add("-strokewidth");
+		cmd.add("2");
+		for (mapping.MapSegment seg: m.lastSegments) {
+			cmd.add("-draw");
+			cmd.add("line " + (orig+scale*seg.origin.x) + "," + (orig+scale*seg.origin.y) + " " +
+				(orig+scale*seg.origin.x + scale*seg.vec.x) + "," + 
+				(orig+scale*seg.origin.y + scale*seg.vec.y));
+		}
+		//
+		cmd.add("-stroke");
+		cmd.add("blue");
+		cmd.add("-strokewidth");
+		cmd.add("2");
+		for (mapping.MapSegment seg: m.getSegments()) {
+			cmd.add("-draw");
+			cmd.add("line " + (orig+scale*seg.origin.x) + "," + (orig+scale*seg.origin.y) + " " +
+				(orig+scale*seg.origin.x + scale*seg.vec.x) + "," + 
+				(orig+scale*seg.origin.y + scale*seg.vec.y));
+		}
+		//
+		cmd.add("-stroke");
+		cmd.add("black");
+		cmd.add("-fill");
+		cmd.add("black");
+		cmd.add("-draw");
+		cmd.add("circle " + 
+			(m.getPosition().x*scale-3+orig) + "," + (m.getPosition().y*scale-3+orig) + " " +
+			(m.getPosition().x*scale+3+orig) + "," + (m.getPosition().y*scale+3+orig));
+		cmd.add("-stroke");
+		cmd.add("black");
+		cmd.add("-draw");
+		cmd.add("line " + (orig+m.getPosition().x*scale) + "," + (orig+m.getPosition().y*scale) 
+			+ " " + 
+			(m.getPosition().x*scale + orig + scale*(float)Math.cos(m.getAngle()) * 20) + "," +
+			(m.getPosition().y*scale + orig + scale*(float)Math.sin(m.getAngle()) * 20));
+		cmd.add(filename);
+		try {
+			Runtime r = Runtime.getRuntime();
+			Process p = r.exec(cmd.toArray(new String[0]));
+			p.waitFor();
+			System.out.println("Output");
+		} catch (Exception e) {
+			System.out.println("Couldn't output: ");
+		}
+	}
+
 
 	public static void main(String[] args) {
 		// // Init
@@ -125,151 +188,25 @@ class test {
 
 		m.init();
 
-		testSweep("data/data1init.csv", angles, distances);
+		testSweep("data/log-INITIAL-0.csv", angles, distances);
 		m.initialScan(angles, distances);
+		testOutput(angles, distances, m, "test1.png");
 
-		// for (int i = 0; i < 12; ++i) {
-		// 	x -= 5;
-		// 	distances = sweep(angles);
-		// 	m.updateLin(angles, distances);
-		// 	System.out.println("-> x = " + m.getPosition().x);
-		// }
+		testSweep("data/log-ROTATION-1.csv", angles, distances);
+		m.updateRot(angles, distances, 0.5f);
+		testOutput(angles, distances, m, "test2.png");
 
-		// theta -= (float)(Math.PI / 6);
-		// distances = sweep(angles);
-		// m.updateRot(angles, distances, (float)-(Math.PI / 4));
-
-		ArrayList<String> cmd = 
-			new ArrayList<String>(Arrays.asList("convert", 
-				"-size", "800x600", "xc:white", "-fill", "red", "-stroke", "black"));
-		for (int i = 0; i < 180; ++i) {
-			int x = 2*(int)((float)Math.cos(angles[i]) * distances[i]);
-			int y = 2*(int)((float)Math.sin(angles[i]) * distances[i]);
-			cmd.add("-draw");
-			cmd.add("circle " + (300+x-1) + "," + (300+y-1) + " " + (300+x+1) + "," + (300+y+1));
-		}
-		cmd.add("-stroke");
-		cmd.add("blue");
-		cmd.add("-strokewidth");
-		cmd.add("2");
-		for (mapping.MapSegment seg: m.getSegments()) {
-			cmd.add("-draw");
-			cmd.add("line " + (300+2*seg.origin.x) + "," + (300+2*seg.origin.y) + " " +
-				(300+2*seg.origin.x + 2*seg.vec.x) + "," + (300+2*seg.origin.y + 2*seg.vec.y));
-		}
-		cmd.add("-stroke");
-		cmd.add("black");
-		cmd.add("-fill");
-		cmd.add("black");
-		cmd.add("-draw");
-		cmd.add("circle " + 
-			(m.getPosition().x-3+300) + "," + (m.getPosition().y-3+300) + " " +
-			(m.getPosition().x+3+300) + "," + (m.getPosition().y+3+300));
-		cmd.add("-stroke");
-		cmd.add("black");
-		cmd.add("-draw");
-		cmd.add("line " + (300+m.getPosition().x) + "," + (300+m.getPosition().y) + " " + 
-			(m.getPosition().x + 300 + (float)Math.cos(m.getAngle()) * 20) + "," +
-			(m.getPosition().y + 300 + (float)Math.sin(m.getAngle()) * 20));
-		cmd.add("test1.png");
-		try {
-			Runtime r = Runtime.getRuntime();
-			Process p = r.exec(cmd.toArray(new String[0]));
-			p.waitFor();
-			System.out.println("Output");
-		} catch (Exception e) {
-			System.out.println("Couldn't output: ");
-		}
-
-		testSweep("data/data1fwd.csv", angles, distances);
+		testSweep("data/log-LINEAR-2.csv", angles, distances);
 		m.updateLin(angles, distances);
+		testOutput(angles, distances, m, "test3.png");
 
-		cmd = 
-			new ArrayList<String>(Arrays.asList("convert", 
-				"-size", "800x600", "xc:white", "-fill", "red", "-stroke", "black"));
-		for (int i = 0; i < 180; ++i) {
-			int x = 2*(int)((float)Math.cos(angles[i] + m.getAngle()) * distances[i] + m.getPosition().x);
-			int y = 2*(int)((float)Math.sin(angles[i] + m.getAngle()) * distances[i] + m.getPosition().y);
-			cmd.add("-draw");
-			cmd.add("circle " + (300+x-1) + "," + (300+y-1) + " " + (300+x+1) + "," + (300+y+1));
-		}
-		cmd.add("-stroke");
-		cmd.add("blue");
-		cmd.add("-strokewidth");
-		cmd.add("2");
-		for (mapping.MapSegment seg: m.getSegments()) {
-			cmd.add("-draw");
-			cmd.add("line " + (300+2*seg.origin.x) + "," + (300+2*seg.origin.y) + " " +
-				(300+2*seg.origin.x + 2*seg.vec.x) + "," + (300+2*seg.origin.y + 2*seg.vec.y));
-		}
-		cmd.add("-stroke");
-		cmd.add("black");
-		cmd.add("-fill");
-		cmd.add("black");
-		cmd.add("-draw");
-		cmd.add("circle " + 
-			(m.getPosition().x-3+300) + "," + (m.getPosition().y-3+300) + " " +
-			(m.getPosition().x+3+300) + "," + (m.getPosition().y+3+300));
-		cmd.add("-stroke");
-		cmd.add("black");
-		cmd.add("-draw");
-		cmd.add("line " + (300+m.getPosition().x) + "," + (300+m.getPosition().y) + " " + 
-			(m.getPosition().x + 300 + (float)Math.cos(m.getAngle()) * 20) + "," +
-			(m.getPosition().y + 300 + (float)Math.sin(m.getAngle()) * 20));
-		cmd.add("test2.png");	
-		try {
-			Runtime r = Runtime.getRuntime();
-			Process p = r.exec(cmd.toArray(new String[0]));
-			p.waitFor();
-			System.out.println("Output");
-		} catch (Exception e) {
-			System.out.println("Couldn't output: ");
-		}
+		testSweep("data/log-ROTATION-3.csv", angles, distances);
+		m.updateRot(angles, distances, -0.5f);
+		testOutput(angles, distances, m, "test4.png");
 
-		testSweep("data/data1rot.csv", angles, distances);
-		m.updateRot(angles, distances, 0);
-
-		cmd = 
-			new ArrayList<String>(Arrays.asList("convert", 
-				"-size", "800x600", "xc:white", "-fill", "red", "-stroke", "black"));
-		for (int i = 0; i < 180; ++i) {
-			int x = 2*(int)((float)Math.cos(angles[i] + m.getAngle()) * distances[i] + m.getPosition().x);
-			int y = 2*(int)((float)Math.sin(angles[i] + m.getAngle()) * distances[i] + m.getPosition().y);
-			cmd.add("-draw");
-			cmd.add("circle " + (300+x-1) + "," + (300+y-1) + " " + (300+x+1) + "," + (300+y+1));
-		}
-		cmd.add("-stroke");
-		cmd.add("blue");
-		cmd.add("-strokewidth");
-		cmd.add("2");
-		for (mapping.MapSegment seg: m.getSegments()) {
-			cmd.add("-draw");
-			cmd.add("line " + (300+2*seg.origin.x) + "," + (300+2*seg.origin.y) + " " +
-				(300+2*seg.origin.x + 2*seg.vec.x) + "," + (300+2*seg.origin.y + 2*seg.vec.y));
-		}
-		cmd.add("-stroke");
-		cmd.add("black");
-		cmd.add("-fill");
-		cmd.add("black");
-		cmd.add("-draw");
-		cmd.add("circle " + 
-			(m.getPosition().x-3+300) + "," + (m.getPosition().y-3+300) + " " +
-			(m.getPosition().x+3+300) + "," + (m.getPosition().y+3+300));
-		cmd.add("-stroke");
-		cmd.add("black");
-		cmd.add("-draw");
-		cmd.add("line " + (300+m.getPosition().x) + "," + (300+m.getPosition().y) + " " + 
-			(m.getPosition().x + 300 + (float)Math.cos(m.getAngle()) * 20) + "," +
-			(m.getPosition().y + 300 + (float)Math.sin(m.getAngle()) * 20));
-		cmd.add("test3.png");	
-		try {
-			Runtime r = Runtime.getRuntime();
-			Process p = r.exec(cmd.toArray(new String[0]));
-			p.waitFor();
-			System.out.println("Output");
-		} catch (Exception e) {
-			System.out.println("Couldn't output: ");
-		}
+		testSweep("data/log-LINEAR-4.csv", angles, distances);
+		m.updateLin(angles, distances);
+		testOutput(angles, distances, m, "test5.png");
 
 		System.out.println("Test");
 	}
