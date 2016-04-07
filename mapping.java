@@ -1,6 +1,6 @@
-// package com.example.corey.bluetoothtest;
+ // package com.example.corey.bluetoothtest;
 
-//import android.util.Log;
+// import android.util.Log;
 
 import java.util.ArrayList;
 import java.lang.Math;
@@ -242,10 +242,10 @@ public class mapping {
 			if (i == pts.size()) {
 				// Final iteration, always fail
 				failed = true;
-			// } else if (thisDifference > 1.6*lastDifference
-			// 	|| thisDifference < 0.625*lastDifference) {
-			// 	// Not following a smooth wall
-			// 	failed = true;
+				// } else if (thisDifference > 1.6*lastDifference
+				// 	|| thisDifference < 0.625*lastDifference) {
+				// 	// Not following a smooth wall
+				// 	failed = true;
 			} else if (thisDifference > 4*distanceAway*PI*2/200) {
 				// Points too spread out
 				failed = true;
@@ -291,9 +291,9 @@ public class mapping {
 				Vec b = sub(pts.get(start_index), robotPosition);
 				float totalAngle = absangle_between(a, b);
 				float c = sub(a, b).length() / (i-start_index-1);
-				if ((i - start_index) > 2 && 
-					segCandLen > 3.0f*LIDAR_VARIANCE &&
-					totalAngle > 0.08f) {
+				if ((i - start_index) > 2 &&
+						segCandLen > 3.0f*LIDAR_VARIANCE &&
+						totalAngle > 0.08f) {
 					// Emit the points start_index up to i - 1
 					// (i is the index that we failed to extend to)
 					MapSegment seg = new MapSegment(currentSweep);
@@ -324,7 +324,7 @@ public class mapping {
 						points.add(pt);
 
 						// New start index one ahead
-						++start_index;						
+						++start_index;
 					}
 					start_is_in_segment = false;
 				} else {
@@ -493,7 +493,7 @@ public class mapping {
 		float oldAngle = robotAngle;
 		Vec u = Vec.fromAngle(robotAngle);
 		u.normalize();
-		u.add(mul(tot, 1.0f/totcount));
+		u.add(mul(tot, 1.0f / totcount));
 		robotAngle = (float)Math.atan2(u.y, u.x);
 		System.out.println("RotationTweak by: " + (robotAngle - oldAngle));
 		return (robotAngle - oldAngle);
@@ -516,7 +516,7 @@ public class mapping {
 	// Process linear motion (post rotation tweaking)
 	// Returns: 0 - success
 	//          -1 - couldn't reckon position, don't add geometry
-	int linearmotion_process(ArrayList<MapSegment> segments, float tweakedRot) {
+	int linearmotion_process(ArrayList<MapSegment> segments, float tweakedRot, float hint) {
 		// Histogram of differences
 		ArrayList<HistEntry> histogram = new ArrayList<HistEntry>();
 		int hist_cap = 10;
@@ -543,6 +543,20 @@ public class mapping {
 					Vec d = sub(a_match.origin, to_match.origin);
 					Vec perp = new Vec(-to_match.vec.y, to_match.vec.x);
 
+					// Check that the projections of the lines segments perpendicular to
+					// the direction of motion overlap.
+					Vec perpAxis = new Vec(-u.y, u.x);
+					float pTo = dot(sub(to_match.origin, robotPosition), perpAxis);
+					float lTo = dot(to_match.vec, perpAxis);
+					float pMatch = dot(sub(a_match.origin, robotPosition), perpAxis);
+					float lMatch = dot(a_match.vec, perpAxis);
+					if ((pMatch > pTo && pMatch < (pTo + lTo)) ||
+							(pTo > pMatch && pTo < pMatch + lMatch)) {
+						// All good
+					} else {
+						continue;
+					}
+
 					// Make sure perp is in the direction of movement
 					if (dot(perp, u) < 0)
 						perp.negate();
@@ -561,7 +575,7 @@ public class mapping {
 					// Note: When frac is small, dirlen will be large, and errors will be
 					// scaled up, so use frac as the weight of a measurement
 					// Add the dirlen to the histogram
-					if (frac > 0.2) {
+					if (frac > 0.2 && dirlen*hint > 0) {
 						// 0.2 -> threshold of useful data
 						// below that the wall is almost paralell to our movement
 						// and we can't get a distance delta from it
@@ -638,7 +652,7 @@ public class mapping {
 	// Merge in a line segment adding it to the state
 	void mergeSegment(MapSegment seg) {
 		// Try to find a colinear line segment to merge with
-		 boolean merged = false;
+		boolean merged = false;
 		for (MapSegment cand: allSegments) {
 			// First, point the two segments in the same direction
 			if (dot(cand.vec, seg.vec) < 0.0f) {
@@ -681,11 +695,11 @@ public class mapping {
 			float overlapSlop = 2*LIDAR_VARIANCE;
 			boolean projectionDoesOverlap =
 					(p2 > -overlapSlop && p2 < tlen+overlapSlop) ||
-					(p1 > -overlapSlop && p1 < tlen+overlapSlop);
+							(p1 > -overlapSlop && p1 < tlen+overlapSlop);
 			// Is one line mostly within the other projection
 			float perpDist = 0;
 			if ((p2 > -overlapSlop && p2 < tlen+overlapSlop) &&
-				(p1 > -overlapSlop && p1 < tlen+overlapSlop)) {
+					(p1 > -overlapSlop && p1 < tlen+overlapSlop)) {
 				// p2 dist
 				perpDist = Math.min(d1, d2);
 			} else if (p2 > -overlapSlop && p2 < tlen+overlapSlop) {
@@ -694,10 +708,10 @@ public class mapping {
 				// p1 dist
 				perpDist = d1;
 			}
-			boolean isCloseSimilar = 
-				projectionDoesOverlap &&
-				(perpDist < 4*LIDAR_VARIANCE) &&
-				(angleDiff < 0.3);
+			boolean isCloseSimilar =
+					projectionDoesOverlap &&
+							(perpDist < 4*LIDAR_VARIANCE) &&
+							(angleDiff < 0.3);
 			//
 			if ((projectionDoesOverlap && (isTouching || relativelyClose)) || doesIntersect || isCloseSimilar) {
 				// We have an intersection. Add the points from seg to
@@ -877,10 +891,24 @@ public class mapping {
 				while(turnHint < -PI) {
 					turnHint += 2 * PI;
 				}
-				if (turnHint < 0) {
-					System.out.println("Adjusting best_diff from " + best_diff + " to " + (best_diff - PI));
-					best_diff -= PI;
+				if (Math.abs(best_diff - PI) < 0.5f) {
+					if (Math.abs(turnHint) < 0.5f)
+						best_diff += PI;
+					else if (Math.abs(turnHint - PI) < 0.5f || Math.abs(turnHint + PI) < 0.5f) {
+						// Do nothing
+					}
+				} else {
+					if (turnHint < 0) {
+						System.out.println("Adjusting best_diff from " + best_diff + " to " + (best_diff - PI));
+						best_diff -= PI;
+					}
 				}
+//				while (best_diff + PI/4 > turnHint) {
+//					best_diff -= PI/2;
+//				}
+//				while (best_diff - PI/4 < turnHint) {
+//					best_diff += PI/2;
+//				}
 				robotAngle += best_diff;
 				System.out.println("Note: Rotation motion moved by " + best_diff);
 				return 0;
@@ -933,7 +961,7 @@ public class mapping {
 	public Vec lastPosDelta = new Vec(0, 0);
 	public float lastRotDelta = 0;
 
-	public void updateLin(float angles[], float distances[]) {
+	public void updateLin(float angles[], float distances[], float hint) {
 		++currentSweep;
 		// First step is feature extraction, we need to break down the
 		// sensor input into points and segments (sequences of 3+ colinear points)
@@ -957,7 +985,7 @@ public class mapping {
 		//
 		oldPos = robotPosition.copy();
 		oldTheta = robotAngle;
-		if (linearmotion_process(segments, rotChange) == 0) {
+		if (linearmotion_process(segments, rotChange, hint) == 0) {
 			// If we could process the linear motion, update the map
 			updateFeatures(oldPos, oldTheta, points, segments);
 			//
