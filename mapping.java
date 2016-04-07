@@ -103,6 +103,13 @@ public class mapping {
 	Vec mul(float a, Vec b) {
 		return new Vec(a*b.x, a*b.y);
 	}
+	Vec projOnto(Vec o, Vec dir, Vec p) {
+		float len = dir.length();
+		return add(
+			o, 
+			mul(dot(dir, sub(p, o))/(len*len), dir)
+		);
+	}
 
 	/* Angle between */
 	float angle_between(Vec a, Vec b) {
@@ -114,6 +121,10 @@ public class mapping {
 	}
 	float absangle_between(Vec a, Vec b) {
 		return Math.abs(angle_between(a, b));
+	}
+	float absangle_betweendir(Vec a, Vec b) {
+		float delta = absangle_between(a, b);
+		return Math.min(delta, PI - delta);
 	}
 
 	/* Update a line segment's linear regression using it's points */
@@ -423,10 +434,71 @@ public class mapping {
 			point.position.y += robotPosition.y;
 		}
 	}
+;
+	float rotationTweak(ArrayList<MapSegment> segments) {
+		// Robot direction
+		Vec u = Vec.fromAngle(robotAngle);
+		Vec v = new Vec(-u.y, u.x);
 
+		// Longest seg to match
+		float longestSeg = 0;
+		for (MapSegment to_match: segments) {
+			if (to_match.vec.length() > longestSeg)
+				longestSeg = to_match.vec.length();
+		}
+
+		// 
+		float totalWeight = 0;
+		float totalDelta = 0;
+		for (MapSegment to_match: segments) {
+			for (MapSegment a_match: allSegments) {
+				Vec toProj = projOnto(to_match.origin, to_match.vec, robotPosition);
+				Vec aProj = projOnto(a_match.origin, a_match.vec, robotPosition);
+				Vec toArm = sub(to_match.origin, toProj);
+				Vec aArm = sub(a_match.origin, aProj);
+				Vec v1 = sub(toProj, robotPosition);
+				Vec v2 = sub(aProj, robotPosition);
+				float frac = to_match.vec.length() / a_match.vec.length();
+				if (absangle_between(v1, v2) < 0.6f && frac > 0.5f && frac < 2.0f) {
+					// Check that the projections are the same sign
+					if (cross(toArm, sub(toProj, robotPosition))*cross(aArm, sub(aProj, robotPosition)) > 0) {
+						// Weight based on the max length of the arm
+						float maxArm = Math.max(
+							Math.max(
+								sub(toProj, to_match.origin).length(), 
+								sub(toProj, add(to_match.origin, to_match.vec)).length()),
+							Math.max(
+								sub(aProj, a_match.origin).length(), 
+								sub(aProj, add(a_match.origin, a_match.vec)).length())
+						);
+						float armLenFrac = maxArm / longestSeg;
+						// Length weighting
+						float lenFrac = Math.max(to_match.vec.length(), a_match.vec.length()) / longestSeg;
+						// Combine for total weighting
+						float weight = armLenFrac * 0.8f + lenFrac * 0.2f;
+						//float weight = armLenFrac * lenFrac;
+						// Theta
+						float theta2 = (float)Math.atan2(v2.y, v2.x);
+						if (theta2 > PI) theta2 -= 2*PI;
+						float theta1 = (float)Math.atan2(v1.y, v1.x);
+						if (theta1 > PI) theta1 -= 2*PI;
+						float dtheta = theta2 - theta1;
+						if (dtheta > PI) dtheta = 2*PI - dtheta;
+						System.out.println("Dtheta: " + dtheta + " weight " + weight);
+						totalWeight += weight;
+						totalDelta += weight*dtheta;
+					}
+				}
+			}
+		}
+		float delta = totalDelta / totalWeight;
+		robotAngle += delta;
+		System.out.println("Tweak angle: " + delta);
+		return delta;
+	}
 
 	// Tweak the rotation of the robot by a small amount to best match
-	float rotationTweak(ArrayList<MapSegment> segments) {
+	float rotationTweak2(ArrayList<MapSegment> segments) {
 		// For each segment in the list, try to find a segment in the map that
 		// has a very similar rotation, and is somewhat nearby.
 
@@ -575,7 +647,7 @@ public class mapping {
 					// Note: When frac is small, dirlen will be large, and errors will be
 					// scaled up, so use frac as the weight of a measurement
 					// Add the dirlen to the histogram
-					if (frac > 0.2 && dirlen*hint > 0) {
+					if (frac > 0.2 && (hint == 0 || dirlen*hint > 0)) {
 						// 0.2 -> threshold of useful data
 						// below that the wall is almost paralell to our movement
 						// and we can't get a distance delta from it
@@ -987,12 +1059,23 @@ public class mapping {
 		oldTheta = robotAngle;
 		if (linearmotion_process(segments, rotChange, hint) == 0) {
 			// If we could process the linear motion, update the map
+			//robotAngle += PI/2;
 			updateFeatures(oldPos, oldTheta, points, segments);
-			//
-			lastPosDelta = sub(robotPosition, oldPos);
-			lastRotDelta += robotAngle - oldTheta;
-			//
 			mergeGeometry(points, segments);
+			//
+/*
+			oldTheta = robotAngle;
+			oldPos = robotPosition.copy();
+			if (linearmotion_process(segments, 0, 0) == 0) {
+				robotAngle -= PI/2;
+				updateFeatures(oldPos, oldTheta, points, segments);
+				//
+				mergeGeometry(points, segments);
+			} else {
+				System.out.println("Failed to update linear");
+				deleteFeatures(points, segments);				
+			}
+*/
 		} else {
 			System.out.println("Failed to update linear");
 			deleteFeatures(points, segments);
