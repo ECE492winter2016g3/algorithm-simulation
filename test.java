@@ -143,8 +143,8 @@ class test {
 		cmd.add("-draw");
 		cmd.add("line " + (orig+m.getPosition().x*scale) + "," + (orig+m.getPosition().y*scale) 
 			+ " " + 
-			(m.getPosition().x*scale + orig + scale*(float)Math.cos(m.getAngle()) * 20) + "," +
-			(m.getPosition().y*scale + orig + scale*(float)Math.sin(m.getAngle()) * 20));
+			(m.getPosition().x*scale + orig + scale*(float)Math.cos(m.getAngle()) * 100) + "," +
+			(m.getPosition().y*scale + orig + scale*(float)Math.sin(m.getAngle()) * 100));
 		cmd.add(filename);
 		try {
 			Runtime r = Runtime.getRuntime();
@@ -193,20 +193,28 @@ class test {
 		testOutput(angles, distances, m, "test1.png");
 
 		testSweep("data/log-ROTATION-1.csv", angles, distances);
-		m.updateRot(angles, distances, 0.5f);
+		m.updateRot(angles, distances, -0.5f);
 		testOutput(angles, distances, m, "test2.png");
 
-		testSweep("data/log-LINEAR-2.csv", angles, distances);
-		m.updateLin(angles, distances);
+		testSweep("data/log-ROTATION-2.csv", angles, distances);
+		m.updateRot(angles, distances, -1);
 		testOutput(angles, distances, m, "test3.png");
 
-		testSweep("data/log-ROTATION-3.csv", angles, distances);
-		m.updateRot(angles, distances, -0.5f);
+		testSweep("data/log-LINEAR-3.csv", angles, distances);
+		m.updateLin(angles, distances, 1.0f);
 		testOutput(angles, distances, m, "test4.png");
 
-		testSweep("data/log-LINEAR-4.csv", angles, distances);
-		m.updateLin(angles, distances);
+		testSweep("data/log-ROTATION-4.csv", angles, distances);
+		m.updateRot(angles, distances, -1);
 		testOutput(angles, distances, m, "test5.png");
+
+		testSweep("data/log-LINEAR-5.csv", angles, distances);
+		m.updateLin(angles, distances, 1);
+		testOutput(angles, distances, m, "test6.png");
+
+		testSweep("data/log-LINEAR-6.csv", angles, distances);
+		m.updateLin(angles, distances, 1);
+		testOutput(angles, distances, m, "test7.png");
 
 		System.out.println("Test");
 	}

@@ -223,7 +223,7 @@ public class mapping {
 		for (int i = 0; i < angles.length; ++i) {
 			// But ignore any that are very close to us, or very far away
 			// from us
-			if (distances[i] > 20.0f && distances[i] < 1000.0f) {
+			if (distances[i] > 20.0f && distances[i] < 1500.0f) {
 				Vec v = mul(distances[i], Vec.fromAngle(angles[i] + robotAngle));
 				v.add(robotPosition);
 				pts.add(v);
@@ -459,7 +459,7 @@ public class mapping {
 				Vec v1 = sub(toProj, robotPosition);
 				Vec v2 = sub(aProj, robotPosition);
 				float frac = to_match.vec.length() / a_match.vec.length();
-				if (absangle_between(v1, v2) < 0.6f && frac > 0.5f && frac < 2.0f) {
+				if (absangle_between(v1, v2) < 0.8f /*&& frac > 0.5f && frac < 2.0f*/) {
 					// Check that the projections are the same sign
 					if (cross(toArm, sub(toProj, robotPosition))*cross(aArm, sub(aProj, robotPosition)) > 0) {
 						// Weight based on the max length of the arm
@@ -471,9 +471,10 @@ public class mapping {
 								sub(aProj, a_match.origin).length(), 
 								sub(aProj, add(a_match.origin, a_match.vec)).length())
 						);
+						//maxArm = maxArm + Math.max(v1.length(), v2.length());
 						float armLenFrac = maxArm / longestSeg;
 						// Length weighting
-						float lenFrac = Math.max(to_match.vec.length(), a_match.vec.length()) / longestSeg;
+						float lenFrac = Math.min(to_match.vec.length(), a_match.vec.length()) / longestSeg;
 						// Combine for total weighting
 						float weight = armLenFrac * 0.8f + lenFrac * 0.2f;
 						//float weight = armLenFrac * lenFrac;
@@ -484,7 +485,7 @@ public class mapping {
 						if (theta1 > PI) theta1 -= 2*PI;
 						float dtheta = theta2 - theta1;
 						if (dtheta > PI) dtheta = 2*PI - dtheta;
-						System.out.println("Dtheta: " + dtheta + " weight " + weight);
+						//System.out.println("Dtheta: " + dtheta + " weight " + weight);
 						totalWeight += weight;
 						totalDelta += weight*dtheta;
 					}
@@ -579,12 +580,6 @@ public class mapping {
 		public int count;
 	}
 
-/*
-	int linearMotionProcess(ArrayList<Vec> points) {
-		return 0;
-	}
-*/
-
 	// Process linear motion (post rotation tweaking)
 	// Returns: 0 - success
 	//          -1 - couldn't reckon position, don't add geometry
@@ -607,8 +602,10 @@ public class mapping {
 			// Try to match to a segment with a very similar rotation, and
 			// a small linear difference along the direction of supposed motion
 			// (the current theta)
+			//System.out.println(">>>>");
 			for (MapSegment a_match: allSegments) {
 				if (absangle_between(to_match.vec, a_match.vec) < TURN_TWEAK) {
+					//System.out.println("Hit: " + absangle_between(to_match.vec, a_match.vec) + " / " + TURN_TWEAK);
 					// Is a candidate, compute the distance to it
 					// First compute the perpendicular vector from segment to match
 					// = (match.o - seg.o) projected onto (perp seg.v, in the direction of movement)
@@ -622,10 +619,12 @@ public class mapping {
 					float lTo = dot(to_match.vec, perpAxis);
 					float pMatch = dot(sub(a_match.origin, robotPosition), perpAxis);
 					float lMatch = dot(a_match.vec, perpAxis);
-					if ((pMatch > pTo && pMatch < (pTo + lTo)) ||
-							(pTo > pMatch && pTo < pMatch + lMatch)) {
+					//System.out.println("" + pTo + " " + lTo + " " + pMatch + " " + lMatch);
+					if ((pMatch > Math.min(pTo, pTo + lTo) && pMatch < Math.max(pTo, pTo + lTo)) ||
+							(pTo > Math.min(pMatch, pMatch + lMatch) && pTo < Math.max(pMatch, pMatch + lMatch))) {
 						// All good
 					} else {
+						//System.out.println("Wrong DIR");
 						continue;
 					}
 
@@ -710,7 +709,17 @@ public class mapping {
 					best_index = i;
 				}
 			}
+			// Check for any closer items with very similar wieghts
+			int new_best = best_index;
 			float best_diff = histogram.get(best_index).total / histogram.get(best_index).count;
+			for (int i = 0; i < histogram.size(); ++i) {
+				if (i != best_index && 
+					histogram.get(i).weight > 0.8f*histogram.get(best_index).weight &&
+					Math.abs(histogram.get(i).total / histogram.get(i).count) < Math.abs(best_diff)) {
+					best_diff = histogram.get(i).total / histogram.get(i).count;
+					new_best = i;
+				}
+			}
 			robotPosition.add(mul(u, best_diff));
 			Vec v = new Vec(-u.y, u.x);
 			// Assumed perpendicular
@@ -1059,23 +1068,21 @@ public class mapping {
 		oldTheta = robotAngle;
 		if (linearmotion_process(segments, rotChange, hint) == 0) {
 			// If we could process the linear motion, update the map
-			//robotAngle += PI/2;
 			updateFeatures(oldPos, oldTheta, points, segments);
-			mergeGeometry(points, segments);
+			robotAngle += PI/2;
+			//mergeGeometry(points, segments);
 			//
-/*
 			oldTheta = robotAngle;
 			oldPos = robotPosition.copy();
 			if (linearmotion_process(segments, 0, 0) == 0) {
-				robotAngle -= PI/2;
 				updateFeatures(oldPos, oldTheta, points, segments);
+				robotAngle -= PI/2;
 				//
 				mergeGeometry(points, segments);
 			} else {
 				System.out.println("Failed to update linear");
 				deleteFeatures(points, segments);				
 			}
-*/
 		} else {
 			System.out.println("Failed to update linear");
 			deleteFeatures(points, segments);
