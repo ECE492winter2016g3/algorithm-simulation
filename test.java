@@ -37,10 +37,10 @@ class test {
 			}
 			v2 = shape.get(i);
 			//
-			l.ox = 20*v1.x;
-			l.oy = 20*v1.y;
-			l.vx = 20*(v2.x - v1.x);
-			l.vy = 20*(v2.y - v1.y);
+			l.ox = 40*v1.x;
+			l.oy = 40*v1.y;
+			l.vx = 40*(v2.x - v1.x);
+			l.vy = 40*(v2.y - v1.y);
 			lines.add(l);
 		}
 	}
@@ -92,10 +92,13 @@ class test {
 			System.out.println("Couldn't open " + filename);
 		}
 	}
+ 
 
+	/**
+	 * Draw out the data in a mapping instance to a given file
+	 */
 	static float orig = 400.0f;
-	static float scale = 0.3f;
-
+	static float scale = 1.0f;
 	public static void testOutput(float[] angles, float[] distances, mapping m, String filename) {
 		ArrayList<String> cmd = 
 			new ArrayList<String>(Arrays.asList("convert", 
@@ -156,38 +159,19 @@ class test {
 		}
 	}
 
-
-	public static void main(String[] args) {
-		// // Init
-		// int count = 50;
-		// float[] angles = new float[count];
-		// for (int i = 0; i < count; ++i) {
-		// 	float angle = (i/50.0f) * ((float)Math.PI*2.0f);
-		// 	angles[i] = angle;
-		// }
-
-		// // Sweep
-		// float[] distances = sweep(angles);
+	/**
+	 * Test with a known dataset to debug issues.
+	 */
+	public static void testDataSet() {
+		// Holders for angles & distances
 		float[] angles = new float[180];
-		float[] distances = new float[180]; 
+		float[] distances = new float[180];
 
-		// Print
-		// String out = "convert -size 200x200 xc:white -fill black -stroke black ";
-		// for (int i = 0; i < count; ++i) {
-		// 	int tx = (int)(100 + x + (float)Math.cos(angles[i])*distances[i]);
-		// 	int ty = (int)(100 + y + (float)Math.sin(angles[i])*distances[i]);
-		// 	out = out + "-draw \"circle " + (tx-1) + "," + (ty-1) + " "
-		// 		+ (tx+1) + "," + (ty+1) + "\" ";
-		// }
-		// out = out + "test.png";
-		//System.out.println(out);
-
-
-		// Mapping
+		// New state and init
 		mapping m = new mapping();
-
 		m.init();
 
+		// Read in sweeps of data and apply them
 		testSweep("data/log-INITIAL-0.csv", angles, distances);
 		m.initialScan(angles, distances);
 		testOutput(angles, distances, m, "test1.png");
@@ -218,4 +202,48 @@ class test {
 
 		System.out.println("Test");
 	}
+
+	/**
+	 * Test with test shape defined at top
+	 */
+	public static void testShape() {
+		// Generate a set of angles
+		int count = 200;
+		float[] angles = new float[count];
+		for (int i = 0; i < count; ++i) {
+			angles[i] = (((float)i)/((float)count)) * ((float)Math.PI*2.0f);
+		}
+
+		// New state and init
+		mapping m = new mapping();
+		m.init();
+
+		// Read in sweeps of data and apply them
+		float[] distances = sweep(angles);
+		m.initialScan(angles, distances);
+		testOutput(angles, distances, m, "test1.png");		
+
+		// Move
+		x += 10;
+
+		// Read in sweeps of data and apply them
+		distances = sweep(angles);
+		m.updateLin(angles, distances, 1.0f);
+		testOutput(angles, distances, m, "test2.png");	
+/*
+		// Rotate
+		theta += 0.4;
+
+		// Read in sweeps of data and apply them
+		distances = sweep(angles);
+		m.updateRot(angles, distances, 0.5f);
+		testOutput(angles, distances, m, "test3.png");	
+*/	
+	}
+
+	public static void main(String[] args) {
+		testShape();
+	}
 }
+
+
