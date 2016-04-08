@@ -98,7 +98,7 @@ class test {
 	 * Draw out the data in a mapping instance to a given file
 	 */
 	static float orig = 400.0f;
-	static float scale = 1.0f;
+	static float scale = 0.3f;
 	public static void testOutput(float[] angles, float[] distances, mapping m, String filename) {
 		ArrayList<String> cmd = 
 			new ArrayList<String>(Arrays.asList("convert", 
@@ -230,7 +230,7 @@ class test {
 		distances = sweep(angles);
 		m.updateLin(angles, distances, 1.0f);
 		testOutput(angles, distances, m, "test2.png");	
-/*
+
 		// Rotate
 		theta += 0.4;
 
@@ -238,11 +238,11 @@ class test {
 		distances = sweep(angles);
 		m.updateRot(angles, distances, 0.5f);
 		testOutput(angles, distances, m, "test3.png");	
-*/	
+
 	}
 
 	public static void main(String[] args) {
-		testShape();
+		testDataSet();
 	}
 }
 
